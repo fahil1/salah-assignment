@@ -64,7 +64,6 @@ public class UserServiceImpl implements UserService {
         log.info("{} users were parsed successfully, saving them now..", allUsers.size());
         for (User user: allUsers) {
             try {
-                userRepository.save(user);
                 saveUserAndHashPwd(user, savedUsers);
                 log.info("{} saved", user.getUsername());
             } catch (Exception e) {
@@ -78,6 +77,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     protected void saveUserAndHashPwd(User user, List<User> savedUsers) {
         user.setPassword(BCrypt.hashpw(user.getPassword(), BCrypt.gensalt()));
+        userRepository.save(user);
         savedUsers.add(user);
     }
 }
