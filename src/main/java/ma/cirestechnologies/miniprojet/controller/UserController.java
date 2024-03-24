@@ -5,6 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import ma.cirestechnologies.miniprojet.dto.BatchResponse;
 import ma.cirestechnologies.miniprojet.entity.User;
 import ma.cirestechnologies.miniprojet.service.UserService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,40 +21,38 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.LongStream;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @RestController
 @RequestMapping("users")
 @Slf4j
 public class UserController {
 
     private UserService userService;
-    private Faker faker;
+    private ObjectMapper objectMapper;
 
-    UserController(UserService userService, Faker faker) {
+    UserController(UserService userService, ObjectMapper objectMapper) {
         this.userService = userService;
-        this.faker = faker;
+        this.objectMapper = objectMapper;
     }
 
-    @GetMapping("generate/{count}")
-    public List<User> generateUsers(@PathVariable Integer count){
-        log.info("generating {} users..", count);
-        List<User> users = LongStream.range(0L, count)
-                .mapToObj(i -> new User(
-                        null,
-                        faker.name().firstName(),
-                        faker.name().lastName(),
-                        faker.date().birthday(),
-                        faker.address().cityName(),
-                        faker.address().country(),
-                        faker.internet().avatar(),
-                        faker.company().name(),
-                        faker.job().position(),
-                        faker.phoneNumber().cellPhone(),
-                        faker.name().firstName() + '.' + faker.name().lastName() + faker.number().digits(2),
-                        faker.internet().emailAddress(),
-                        faker.internet().password(),
-                        faker.options().option("USER", "ADMIN")
-                )).collect(Collectors.toList());
-        return users;
+    @GetMapping("generate")
+    public ResponseEntity<String> generateUsers(@RequestParam(name = "count") Integer count) {
+        try {
+            log.info("generating {} users..", count);
+            List<User> users = userService.generateUsers(count);
+            String usersJson = objectMapper.writeValueAsString(users);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=users.json")
+                    .contentLength(usersJson.length())
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(usersJson);
+
+        } catch (Exception e) {
+            log.error("Failed to generate user JSON file", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @PostMapping(value = "batch", consumes = "multipart/form-data")
