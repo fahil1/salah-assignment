@@ -4,6 +4,7 @@ import com.github.javafaker.Faker;
 import lombok.extern.slf4j.Slf4j;
 import ma.cirestechnologies.miniprojet.dto.BatchResponse;
 import ma.cirestechnologies.miniprojet.entity.User;
+import ma.cirestechnologies.miniprojet.exception.UserNotFound;
 import ma.cirestechnologies.miniprojet.service.UserService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,8 @@ import java.util.List;
 import java.util.stream.LongStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import javax.security.auth.login.AccountNotFoundException;
 
 @RestController
 @RequestMapping("users")
@@ -52,6 +55,19 @@ public class UserController {
         } catch (Exception e) {
             log.error("Failed to generate user JSON file", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("{username}")
+    public User fetchUser(@PathVariable String username) throws UserNotFound {
+        log.info("fetching user {}..", username);
+        final User user = userService.fetchUser(username);
+        if (user != null) {
+            log.info("user found! {}", user);
+            return user;
+        } else {
+            log.error("user not found!! {}", username);
+            throw new UserNotFound("test", null);
         }
     }
 

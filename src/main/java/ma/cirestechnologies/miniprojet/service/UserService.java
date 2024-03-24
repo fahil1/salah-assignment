@@ -8,5 +8,6 @@ import java.util.List;
 public interface UserService {
 
     List<User> generateUsers(int count);
+    User fetchUser(String username);
     int[] parseAndSaveUsersJSON(final String usersJson) throws JsonProcessingException;
 }
