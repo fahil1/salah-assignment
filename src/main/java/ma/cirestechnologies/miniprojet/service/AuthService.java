@@ -1,10 +1,9 @@
 package ma.cirestechnologies.miniprojet.service;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import jakarta.servlet.http.HttpServletRequest;
 import ma.cirestechnologies.miniprojet.entity.User;
-import ma.cirestechnologies.miniprojet.exception.UnauthenticatedUser;
-import ma.cirestechnologies.miniprojet.exception.UserNotFound;
+import ma.cirestechnologies.miniprojet.exception.UnauthenticatedUserException;
+import ma.cirestechnologies.miniprojet.exception.UserNotFoundException;
 import ma.cirestechnologies.miniprojet.repository.UserRepository;
 import org.apache.commons.lang3.StringUtils;
 import org.mindrot.jbcrypt.BCrypt;
@@ -19,7 +18,8 @@ public class AuthService {
 
     @Value("${jwt.secret}")
     private String secretKey;
-    private final long validityInMilliseconds = 3600000*24; // 24h
+    @Value("${jwt.duration}")
+    private long validityInSeconds;
 
     @Autowired
     private UserRepository userRepository;
@@ -28,29 +28,37 @@ public class AuthService {
 
         final User retrievedUser = userRepository.findByUsername(username);
         if (retrievedUser == null) {
-            throw new UserNotFound(String.format("The user %s is not known to the app", username));
+            throw new UserNotFoundException(String.format("The user %s is not known to the app", username));
         }
 
         if (!BCrypt.checkpw(password, retrievedUser.getPassword())) {
-            throw new UnauthenticatedUser(String.format("The password is incorrect for user %s", retrievedUser.getUsername()));
+            throw new UnauthenticatedUserException(String.format("The password is incorrect for user %s", retrievedUser.getUsername()));
         }
 
         return generateToken(retrievedUser);
     }
 
-    public String validateToken(String jwtToken) throws Exception {
-        String subject = Jwts.parser()
-                .setSigningKey(secretKey)
-                .parseClaimsJws(jwtToken)
-                .getBody()
-                .getSubject();
+    public String validateToken(String jwtToken) throws UnauthenticatedUserException {
+        String subject;
+        try {
+            subject = Jwts.parser()
+                    .setSigningKey(secretKey)
+                    .parseClaimsJws(jwtToken)
+                    .getBody()
+                    .getSubject();
+            if (StringUtils.isEmpty(subject)) {
+                throw new UnauthenticatedUserException("The user cannot be authenticated with " + jwtToken);
+            }
+        } catch (Exception e) {
+           throw new UnauthenticatedUserException(e);
+        }
         return subject;
     }
 
     private String generateToken(User user) {
 
         Date now = new Date();
-        Date validity = new Date(now.getTime() + validityInMilliseconds);
+        Date validity = new Date(now.getTime() + validityInSeconds*1000);
 
         return Jwts.builder()
                 .setSubject(user.getUsername())

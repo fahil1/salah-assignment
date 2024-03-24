@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javafaker.Faker;
 import lombok.extern.slf4j.Slf4j;
 import ma.cirestechnologies.miniprojet.entity.User;
+import ma.cirestechnologies.miniprojet.exception.UnauthorizedUserException;
+import ma.cirestechnologies.miniprojet.exception.UserBatchGenerationException;
+import ma.cirestechnologies.miniprojet.exception.UserNotFoundException;
 import ma.cirestechnologies.miniprojet.repository.UserRepository;
 import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.stereotype.Service;
@@ -19,9 +22,9 @@ import java.util.stream.LongStream;
 @Slf4j
 public class UserServiceImpl implements UserService {
 
-    private UserRepository userRepository;
-    private ObjectMapper objectMapper;
-    private Faker faker;
+    private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
+    private final Faker faker;
     UserServiceImpl(UserRepository userRepository, ObjectMapper objectMapper, Faker faker) {
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
@@ -29,7 +32,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<User> generateUsers(int count) {
+    public String generateUsers(int count) throws UserBatchGenerationException {
         List<User> users = LongStream.range(0L, count)
                 .mapToObj(i -> new User(
                         null,
@@ -47,13 +50,34 @@ public class UserServiceImpl implements UserService {
                         faker.internet().password(),
                         faker.options().option("USER", "ADMIN")
                 )).toList();
-        return users;
+
+        String usersJson;
+        try {
+            usersJson = objectMapper.writeValueAsString(users);
+        } catch (JsonProcessingException e) {
+            throw new UserBatchGenerationException("Cannot generate the JSON of the users", e);
+        }
+        return usersJson;
     }
 
     @Override
-    public User fetchUser(String username) {
+    public User fetchUser(String username) throws UserNotFoundException {
         log.info("fetching the user {}..", username);
-        return userRepository.findByUsername(username);
+        final User user = userRepository.findByUsername(username);
+        if (user == null) {
+           throw new UserNotFoundException(String.format("The user %s is not known to the app", username));
+        }
+        return user;
+    }
+
+    @Override
+    public User fetchUserForAuthenticatedUsername(String username, User authenticated) throws UnauthorizedUserException, UserNotFoundException {
+        if ("ADMIN".equals(authenticated.getRole()) || authenticated.getUsername().equals(username)) {
+            return this.fetchUser(username);
+        }
+        else {
+            throw new UnauthorizedUserException(String.format("User %s is not authorized to fetch this user %s", authenticated.getUsername(), username));
+        }
     }
 
     @Override
